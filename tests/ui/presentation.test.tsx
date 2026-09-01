@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import React from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
 import { LogExplorer } from "@/components/diagnostics/LogExplorer";
 import { IncidentSectionNav } from "@/components/incidents/IncidentSectionNav";
+
+afterEach(cleanup);
 
 const logs = [
   {
@@ -71,3 +73,4 @@ describe("incident presentation navigation", () => {
     );
   });
 });
+
