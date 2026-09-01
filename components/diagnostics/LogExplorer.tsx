@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 
 type LogItem = {
   id: string;
@@ -89,3 +89,4 @@ export function LogExplorer({ logs }: { logs: LogItem[] }) {
     </div>
   );
 }
+

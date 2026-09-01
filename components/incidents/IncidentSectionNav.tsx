@@ -1,3 +1,5 @@
+import React from "react";
+
 const sections = [
   ["context", "Context"],
   ["diagnostics", "Diagnostics"],
@@ -27,3 +29,4 @@ export function IncidentSectionNav() {
     </nav>
   );
 }
+
