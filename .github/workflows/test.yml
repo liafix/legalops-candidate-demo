@@ -1,0 +1,94 @@
+name: quality-gate
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: legalops
+          POSTGRES_PASSWORD: legalops
+          POSTGRES_DB: legalops
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U legalops -d legalops"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://legalops:legalops@127.0.0.1:5432/legalops?schema=public
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Prepare reproducible lockfile
+        id: lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f package-lock.json ]]; then
+            echo "generated_lock=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "package-lock.json is not committed yet; bootstrapping it for this CI run."
+            npm run release:lock
+            echo "generated_lock=true" >> "$GITHUB_OUTPUT"
+          fi
+          npm run release:check-lock
+
+      - name: Preserve bootstrapped package-lock
+        if: steps.lock.outputs.generated_lock == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-lock-bootstrap
+          path: package-lock.json
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Explain lockfile bootstrap
+        if: steps.lock.outputs.generated_lock == 'true'
+        shell: bash
+        run: |
+          {
+            echo "### Release lockfile bootstrap"
+            echo "This run generated package-lock.json because it was not committed."
+            echo "Download the **package-lock-bootstrap** artifact and commit package-lock.json before the final production gate."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Install from lockfile
+        run: npm ci
+
+      - name: Audit production dependencies
+        run: npm run security:audit
+
+      - name: Generate Prisma client
+        run: npm run db:generate
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit and component tests
+        run: npm test
+
+      - name: Apply database migrations
+        run: npm run db:migrate:deploy
+
+      - name: Database-backed golden-path test
+        run: npm run test:integration
+
+      - name: Production build
+        run: npm run build

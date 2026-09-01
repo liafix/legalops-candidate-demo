@@ -1,0 +1,156 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum IncidentPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum IncidentStatus {
+  OPEN
+  INVESTIGATING
+  READY_FOR_QA
+  RESOLVED
+}
+
+enum ServiceStatus {
+  HEALTHY
+  DEGRADED
+  DOWN
+}
+
+enum SyncStatus {
+  PENDING
+  FAILED
+  RETRYING
+  COMPLETED
+}
+
+enum DocumentStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum LogSeverity {
+  INFO
+  WARN
+  ERROR
+}
+
+model Service {
+  id        String          @id
+  name      String          @unique
+  status    ServiceStatus
+  incidents Incident[]
+  logs      DiagnosticLog[]
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+}
+
+model Incident {
+  id                  String             @id
+  title               String
+  description         String
+  expected            String
+  actual              String
+  customerImpact      String
+  priority            IncidentPriority
+  status              IncidentStatus
+  serviceId           String
+  service             Service            @relation(fields: [serviceId], references: [id])
+  reportedAt          DateTime
+  assignedTo          String?
+  requester           String
+  requestChannel      String
+  requestSummary      String
+  affectedProduct     String
+  technicalTask       String
+  rootCause           String?
+  resolutionNote      String?
+  requesterResolution String?
+  documentId          String?
+  document            Document?          @relation(fields: [documentId], references: [id])
+  logs                DiagnosticLog[]
+  apiRequests         ApiRequest[]
+  qaChecks            QaCheck[]
+  auditEvents         AuditEvent[]
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+}
+
+model Document {
+  id         String         @id
+  title      String
+  version    Int
+  status     DocumentStatus
+  syncStatus SyncStatus
+  incidents  Incident[]
+  updatedAt  DateTime       @updatedAt
+  createdAt  DateTime       @default(now())
+}
+
+model DiagnosticLog {
+  id         String      @id @default(cuid())
+  incidentId String
+  incident   Incident    @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  timestamp  DateTime
+  severity   LogSeverity
+  serviceId  String
+  service    Service     @relation(fields: [serviceId], references: [id])
+  requestId  String?
+  message    String
+  metadata   Json?
+
+  @@index([incidentId, timestamp])
+  @@index([incidentId, severity, timestamp])
+  @@index([requestId])
+}
+
+model ApiRequest {
+  id           String   @id @default(cuid())
+  requestId    String   @unique
+  incidentId   String
+  incident     Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  method       String
+  endpoint     String
+  statusCode   Int
+  requestBody  Json?
+  responseBody Json?
+  timestamp    DateTime
+
+  @@index([incidentId, timestamp])
+}
+
+model QaCheck {
+  id         String   @id
+  incidentId String
+  incident   Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  key        String
+  label      String
+  required   Boolean  @default(true)
+  passed     Boolean  @default(false)
+  checkedAt  DateTime?
+
+  @@unique([incidentId, key])
+}
+
+model AuditEvent {
+  id         String   @id @default(cuid())
+  incidentId String
+  incident   Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  eventType  String
+  actor      String
+  metadata   Json?
+  timestamp  DateTime @default(now())
+
+  @@index([incidentId, timestamp])
+}
